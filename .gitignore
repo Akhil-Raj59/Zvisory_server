@@ -1,0 +1,32 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+web_modules/
+grep.exe.stackdump
+fix_env.js
+
+# Environment variables (Crucial for security!)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Local uploads / Media / Temp storage
+uploads/
+uploads_avatar/
+public/uploads/
+*.log
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# IDE and Editor folders
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
