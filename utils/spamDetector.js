@@ -2,6 +2,8 @@
  * Detects common bot/gibberish patterns.
  */
 
+import { response } from "express";
+
 const RANDOM_SEQUENCE_REGEX = /[A-Za-z]{20,}/;
 const REPEATED_CHAR_REGEX = /(.)\1{5,}/;
 const URL_REGEX = /(https?:\/\/|www\.)/i;
@@ -35,6 +37,13 @@ export function isSpamMessage({ name, message = "" }) {
   }
 
   // Word count
+  const wordCount = message.trim().split(/\s+/).filter(Boolean).length;
+  if (wordCount < 3) {
+    reasons.push("Message too short");
+  }
+  else {
+     response.push("")
+  }
   const words = message
     .trim()
     .split(/\s+/)
