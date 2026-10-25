@@ -20,8 +20,9 @@ export const getGeoFromIP = async (ip) => {
     const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city`, {
       signal: controller.signal,
     });
+    console.log('Ip Geo Response:', response);
 
-    clearTimeout(timeout);
+    clearTimeout
 
     if (!response.ok) return fallback;
 

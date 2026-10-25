@@ -6,7 +6,8 @@ import errorMiddleware from './middleware/error.middleware.js';
 import { ensureDbConnected } from './middleware/db.middleware.js';
 
 import userRoutes from './routes/user.router.js';
-
+import projectRoutes from './routes/project.router.js';
+import adminProjectRoutes from './routes/admin.project.router.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -19,25 +20,36 @@ const allowedOrigins = [
   'http://localhost:3000',
 ].filter(Boolean);
 
-app.use(cors({
-  origin: allowedOrigins,
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Cookie'],
-  exposedHeaders: ['Set-Cookie'] 
-}));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, or server-to-server)
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, true); // Permissive for local dev & internal server components
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Cookie'],
+    exposedHeaders: ['Set-Cookie'],
+  })
+);
 
 app.options('/{*any}', cors());
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
 app.use(ensureDbConnected);
 app.get('/ping', (_req, res) => res.json({ status: 'ok', message: 'Pong' }));
 
+// API Routes
 app.use('/api/v1/user', userRoutes);
-
+app.use('/api/v1/projects', projectRoutes);
+app.use('/api/v1/project', projectRoutes); // Backward compatibility
+app.use('/api/v1/admin', adminProjectRoutes);
 
 app.all('/{*any}', (_req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });

@@ -1,34 +1,34 @@
 import multer from 'multer';
-import cloudinary from "cloudinary";
 import path from 'path';
-import { config } from 'dotenv';
-config();
+import os from 'os';
 
-cloudinary.v2.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
+const tempDir = os.tmpdir();
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, tempDir);
+  },
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `zvisory-${uniqueSuffix}${ext}`);
+  },
 });
 
+const fileFilter = (_req, file, cb) => {
+  const allowedExtensions = ['.jpg', '.jpeg', '.webp', '.png', '.svg', '.pdf'];
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (allowedExtensions.includes(ext)) {
+    cb(null, true);
+  } else {
+    cb(new Error(`Unsupported file type: ${ext}. Allowed: JPG, PNG, WEBP, SVG, PDF`), false);
+  }
+};
+
 const upload = multer({
-    
-    dest: "/tmp",
-    limits: { fileSize: 50 * 1024 * 1024 },
-    storage: multer.diskStorage({
-        destination: "/tmp", 
-        filename: (_req, file, cb) => {
-            
-            cb(null, `${Date.now()}-${file.originalname}`);
-        }
-    }),
-    fileFilter: (_req, file, cb) => {
-        let ext = path.extname(file.originalname).toLowerCase(); 
-        if (ext !== ".jpg" && ext !== ".jpeg" && ext !== ".webp" && ext !== ".png" && ext !== ".mp4" && ext !== ".pdf") {
-            cb(new Error(`Unsupported file type! ${ext}`), false);
-            return;
-        }
-        cb(null, true);
-    },
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max
+  fileFilter,
 });
 
 export default upload;
