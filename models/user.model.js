@@ -2,6 +2,7 @@ import { Schema,model } from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+
 const userSchema = new Schema({
     fullName : {
         type : String,
@@ -60,19 +61,28 @@ const userSchema = new Schema({
 },{timestamps : true})
 
 
-userSchema.pre("save",async function(next){
-    if(!this.isModified("password")) return next();
-    this.password = await bcrypt.hash(this.password,10);
+userSchema.pre("save", async function(next){
+    // Hash password if modified
+    if(this.isModified("password")){
+        this.password = await bcrypt.hash(this.password, 10);
+    }
+    const companyDomain = process.env.COMPANY_DOMAIN;
+    if (this.isNew && companyDomain && this.email && this.email.toLowerCase().endsWith(`@${companyDomain.toLowerCase()}`)) {
+        if (this.role === "CUSTOMER") {
+            this.role = "EMPLOYEE";
+        }
+    }
     next();
 });
+
 userSchema.methods = {
     generateToken : async function(){
-        return await jwt.sign({_id : this._id,role: this.role}, process.env.JWT_SECRET,{
+        return await jwt.sign({_id : this._id, role: this.role}, process.env.JWT_SECRET,{
             expiresIn : process.env.JWT_EXPIRY
         });
     },
     comparePassword : async function(plainTextPassword){
-        return await bcrypt.compare(plainTextPassword,this.password);
+        return await bcrypt.compare(plainTextPassword, this.password);
     },
     generatePasswordResetToken : async function(){
         const resetToken = crypto.randomBytes(20).toString('hex');
@@ -97,12 +107,12 @@ userSchema.methods = {
             .update(otp)
             .digest("hex");
 
-        this.emailVerificationOTPExpiry =
-            Date.now() + 10 * 60 * 1000;
+        this.emailVerificationOTPExpiry = Date.now() + (10 * 60 * 1000);
 
         return otp;
     }
 
 }
-const User = model("User",userSchema);
+
+const User = model("User", userSchema);
 export default User;
