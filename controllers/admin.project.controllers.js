@@ -385,17 +385,26 @@ export const adminValidateMediaUrl = asyncHandler(async (req, res, next) => {
  * Admin: Reference data for form dropdowns & autocompletes
  */
 export const adminGetReferenceData = asyncHandler(async (_req, res) => {
-  const [cities, developers, categories, propertyTypes] = await Promise.all([
+  const [projectCities, registeredCities, developers, categories, propertyTypes] = await Promise.all([
     Project.distinct('city'),
+    City.find({}).select('_id name slug state country status isFeatured projectCount').sort({ name: 1 }).lean(),
     Project.distinct('developer'),
     Project.distinct('categories'),
     Project.distinct('propertyType'),
   ]);
 
+  const allCityNames = Array.from(
+    new Set([
+      ...registeredCities.map((c) => c.name),
+      ...projectCities.filter(Boolean),
+    ])
+  ).sort();
+
   res.status(200).json({
     success: true,
     data: {
-      cities: cities.filter(Boolean).sort(),
+      cities: allCityNames,
+      registeredCities,
       developers: developers.filter(Boolean).sort(),
       categories: Array.from(new Set(categories.flat().filter(Boolean))).sort(),
       propertyTypes: propertyTypes.filter(Boolean).sort(),
@@ -476,6 +485,10 @@ export const adminSeedExcelProjects = asyncHandler(async (req, res, next) => {
   let insertedCount = 0;
   let updatedCount = 0;
   const errors = [];
+  const cityWarnings = [];
+
+  const existingMasterCities = await City.find({}).lean();
+  const cityMapByName = new Map(existingMasterCities.map((c) => [c.name.toLowerCase().trim(), c]));
 
   for (let idx = 0; idx < rawData.length; idx++) {
     const raw = rawData[idx];
@@ -523,7 +536,41 @@ export const adminSeedExcelProjects = asyncHandler(async (req, res, next) => {
       if (!developer) developer = 'Zvisory Partner Developer';
 
       const locations = splitSemi(raw.locations);
-      const city = locations.length > 0 ? locations[0] : 'Gurugram';
+      const rawCityStr = locations.length > 0 ? clean(locations[0]) : '';
+      let city = 'Gurugram';
+
+      if (rawCityStr) {
+        const lowerRaw = rawCityStr.toLowerCase().trim();
+        const matched = cityMapByName.get(lowerRaw);
+        if (matched) {
+          city = matched.name;
+        } else {
+          // Normalization alias mappings
+          const aliasMap = {
+            gurgaon: 'Gurugram',
+            gurugram: 'Gurugram',
+            bangalore: 'Bengaluru',
+            bengaluru: 'Bengaluru',
+            madras: 'Chennai',
+            chennai: 'Chennai',
+            hyderabad: 'Hyderabad',
+            delhi: 'Delhi',
+            'new delhi': 'Delhi',
+            noida: 'Noida',
+            mumbai: 'Mumbai',
+          };
+          if (aliasMap[lowerRaw]) {
+            city = aliasMap[lowerRaw];
+          } else {
+            city = rawCityStr
+              .split(' ')
+              .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+              .join(' ');
+            cityWarnings.push({ row: idx + 2, project: title, rawValue: rawCityStr, normalizedCity: city });
+          }
+        }
+      }
+
       const microMarket = clean(raw.micro_market, locations.join(', ') || city);
       const location = microMarket ? `${microMarket}, ${city}` : city;
 
@@ -773,10 +820,14 @@ export const adminSeedExcelProjects = asyncHandler(async (req, res, next) => {
       await City.findOneAndUpdate(
         { slug: c.toLowerCase().replace(/\s+/g, '-') },
         {
-          name: c,
-          slug: c.toLowerCase().replace(/\s+/g, '-'),
-          projectCount: count,
-          isFeatured: true,
+          $setOnInsert: {
+            name: c,
+            slug: c.toLowerCase().replace(/\s+/g, '-'),
+            isFeatured: false,
+          },
+          $set: {
+            projectCount: count,
+          },
         },
         { upsert: true }
       );
@@ -785,11 +836,13 @@ export const adminSeedExcelProjects = asyncHandler(async (req, res, next) => {
 
   res.status(200).json({
     success: true,
-    message: `Seeded ${insertedCount} projects into MongoDB`,
+    message: `Seeded ${insertedCount} projects into MongoDB (${errors.length} failed, ${cityWarnings.length} city warnings)`,
     insertedCount,
     updatedCount,
     totalProcessed: rawData.length,
+    failedCount: errors.length,
     errors,
+    cityWarnings,
   });
 });
 
@@ -797,20 +850,41 @@ export const adminSeedExcelProjects = asyncHandler(async (req, res, next) => {
  * Admin: Get real-time dashboard statistics from MongoDB
  */
 export const adminGetStats = asyncHandler(async (_req, res) => {
-  const [statusCounts, featuredCount, cityCount, developerCount, recentProjects] =
-    await Promise.all([
-      Project.aggregate([
-        { $group: { _id: '$status', count: { $sum: 1 } } },
-      ]),
-      Project.countDocuments({ featured: true }),
-      Project.distinct('city').then((arr) => arr.filter(Boolean).length),
-      Project.distinct('developer').then((arr) => arr.filter(Boolean).length),
-      Project.find({})
-        .sort({ updatedAt: -1 })
-        .limit(5)
-        .select('title slug status launchStatus updatedAt cardBanner city developer')
-        .lean(),
-    ]);
+  const [
+    statusCounts,
+    featuredCount,
+    totalCitiesInDb,
+    publishedCitiesInDb,
+    distinctCitiesInProjects,
+    developerCount,
+    recentProjects,
+    projectsByCity,
+  ] = await Promise.all([
+    Project.aggregate([
+      { $group: { _id: '$status', count: { $sum: 1 } } },
+    ]),
+    Project.countDocuments({ featured: true }),
+    City.countDocuments(),
+    City.countDocuments({ status: 'published' }),
+    Project.distinct('city').then((arr) => arr.filter(Boolean).length),
+    Project.distinct('developer').then((arr) => arr.filter(Boolean).length),
+    Project.find({})
+      .sort({ updatedAt: -1 })
+      .limit(5)
+      .select('title slug status launchStatus updatedAt cardBanner city developer')
+      .lean(),
+    Project.aggregate([
+      {
+        $group: {
+          _id: '$city',
+          total: { $sum: 1 },
+          published: { $sum: { $cond: [{ $eq: ['$status', 'published'] }, 1, 0] } },
+        },
+      },
+      { $sort: { total: -1 } },
+      { $limit: 8 },
+    ]),
+  ]);
 
   const statusMap = { published: 0, draft: 0, archived: 0 };
   let total = 0;
@@ -831,7 +905,13 @@ export const adminGetStats = asyncHandler(async (_req, res) => {
         archived: statusMap.archived,
         featured: featuredCount,
       },
-      cities: cityCount,
+      cities: totalCitiesInDb, // Preserve scalar for backward compatibility
+      cityStats: {
+        total: totalCitiesInDb,
+        published: publishedCitiesInDb,
+        distinctInProjects: distinctCitiesInProjects,
+      },
+      projectsByCity,
       developers: developerCount,
       recentProjects,
     },
