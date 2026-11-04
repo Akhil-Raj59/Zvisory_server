@@ -385,10 +385,11 @@ export const adminValidateMediaUrl = asyncHandler(async (req, res, next) => {
  * Admin: Reference data for form dropdowns & autocompletes
  */
 export const adminGetReferenceData = asyncHandler(async (_req, res) => {
-  const [projectCities, registeredCities, developers, categories, propertyTypes] = await Promise.all([
+  const [projectCities, registeredCities, projectDevelopers, registeredDevelopers, categories, propertyTypes] = await Promise.all([
     Project.distinct('city'),
     City.find({}).select('_id name slug state country status isFeatured projectCount').sort({ name: 1 }).lean(),
     Project.distinct('developer'),
+    Developer.find({}).select('_id name slug logo headquarters status projectCount').sort({ name: 1 }).lean(),
     Project.distinct('categories'),
     Project.distinct('propertyType'),
   ]);
@@ -400,12 +401,20 @@ export const adminGetReferenceData = asyncHandler(async (_req, res) => {
     ])
   ).sort();
 
+  const allDeveloperNames = Array.from(
+    new Set([
+      ...registeredDevelopers.map((d) => d.name),
+      ...projectDevelopers.filter(Boolean),
+    ])
+  ).sort();
+
   res.status(200).json({
     success: true,
     data: {
       cities: allCityNames,
       registeredCities,
-      developers: developers.filter(Boolean).sort(),
+      developers: allDeveloperNames,
+      registeredDevelopers,
       categories: Array.from(new Set(categories.flat().filter(Boolean))).sort(),
       propertyTypes: propertyTypes.filter(Boolean).sort(),
       defaultPropertyTypes: ['Apartments', 'High Rise', 'Low Rise', 'Plots', 'Commercial', 'Villas', 'Penthouse'],

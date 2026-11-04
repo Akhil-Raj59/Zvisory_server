@@ -10,6 +10,7 @@ import projectRoutes from './routes/project.router.js';
 import adminProjectRoutes from './routes/admin.project.router.js';
 import cityRoutes from './routes/city.router.js';
 import adminCityRoutes from './routes/admin.city.router.js';
+import developerRoutes from './routes/developer.router.js';
 import adminDeveloperRoutes from './routes/admin.developer.router.js';
 
 const app = express();
@@ -55,6 +56,7 @@ app.use('/api/v1/project', projectRoutes); // Backward compatibility
 app.use('/api/v1/admin', adminProjectRoutes);
 app.use('/api/v1/cities', cityRoutes);
 app.use('/api/v1/admin/cities', adminCityRoutes);
+app.use('/api/v1/developers', developerRoutes);
 app.use('/api/v1/admin/developers', adminDeveloperRoutes);
 
 app.all('/{*any}', (_req, res) => {
