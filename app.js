@@ -12,6 +12,8 @@ import cityRoutes from './routes/city.router.js';
 import adminCityRoutes from './routes/admin.city.router.js';
 import developerRoutes from './routes/developer.router.js';
 import adminDeveloperRoutes from './routes/admin.developer.router.js';
+import leadRoutes from './routes/lead.router.js';
+import adminLeadRoutes from './routes/admin.lead.router.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -58,6 +60,8 @@ app.use('/api/v1/cities', cityRoutes);
 app.use('/api/v1/admin/cities', adminCityRoutes);
 app.use('/api/v1/developers', developerRoutes);
 app.use('/api/v1/admin/developers', adminDeveloperRoutes);
+app.use('/api/v1/leads', leadRoutes);
+app.use('/api/v1/admin/leads', adminLeadRoutes);
 
 app.all('/{*any}', (_req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
