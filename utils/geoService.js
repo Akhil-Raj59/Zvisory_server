@@ -17,12 +17,10 @@ export const getGeoFromIP = async (ip) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000); // 3-second timeout
 
-    const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city`, {
+    const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,countryCode,regionName,city`, {
       signal: controller.signal,
     });
-    console.log('Ip Geo Response:', response);
-
-    clearTimeout
+    clearTimeout(timeout);
 
     if (!response.ok) return fallback;
 
@@ -32,6 +30,7 @@ export const getGeoFromIP = async (ip) => {
 
     return {
       country: data.country || '',
+      countryCode: data.countryCode || '',
       state: data.regionName || '',
       city: data.city || '',
     };
