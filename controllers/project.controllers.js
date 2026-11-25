@@ -63,17 +63,85 @@ export const getProjects = asyncHandler(async (req, res) => {
 
   // Property Type filter
   if (propertyType && propertyType !== 'All') {
-    query.propertyType = { $regex: new RegExp(`^${propertyType.trim()}$`, 'i') };
+    const pt = propertyType.trim();
+    if (/high\s*rise/i.test(pt)) {
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { propertyType: /high\s*rise/i },
+          { propertyType: /apartments/i },
+          { elevation: /(G\s*\+\s*(1[0-9]|[2-9][0-9])|[2-9]B)/i },
+        ],
+      });
+    } else if (/low\s*rise/i.test(pt)) {
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { propertyType: /low\s*rise/i },
+          { elevation: /(G\s*\+\s*[1-4]\b|Floors)/i },
+          { unitConfigurations: /Floors/i },
+        ],
+      });
+    } else if (/plot/i.test(pt)) {
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { propertyType: /plot/i },
+          { unitConfigurations: /plot/i },
+        ],
+      });
+    } else if (/commercial/i.test(pt)) {
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { propertyType: /commercial/i },
+          { categories: /commercial/i },
+        ],
+      });
+    } else {
+      query.propertyType = { $regex: new RegExp(`^${pt}$`, 'i') };
+    }
   }
 
   // Launch Status filter
   if (launchStatus && launchStatus !== 'All') {
-    query.launchStatus = { $regex: new RegExp(`^${launchStatus.trim()}$`, 'i') };
+    const ls = launchStatus.trim();
+    if (/ready/i.test(ls)) {
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { launchStatus: /ready/i },
+          { possessionText: /ready/i },
+          { launchStatus: /Dec 202[5-7]/i },
+        ],
+      });
+    } else if (/new\s*launch/i.test(ls)) {
+      query.launchStatus = { $regex: /new\s*launch/i };
+    } else if (/pre.*launch/i.test(ls)) {
+      query.launchStatus = { $regex: /pre.*launch/i };
+    } else if (/under\s*construction/i.test(ls)) {
+      query.launchStatus = { $regex: /under\s*construction/i };
+    } else {
+      query.launchStatus = { $regex: new RegExp(`^${ls}$`, 'i') };
+    }
   }
 
   // Unit Configuration / BHK filter
   if (unitConfig && unitConfig !== 'All') {
-    query.unitConfigurations = { $elemMatch: { $regex: new RegExp(unitConfig.trim(), 'i') } };
+    const uc = unitConfig.trim();
+    if (/4\+|5/i.test(uc)) {
+      query.unitConfigurations = { $elemMatch: { $regex: /(4\+|5|6|Sky Villas)/i } };
+    } else {
+      const numMatch = uc.match(/(\d+)/);
+      if (numMatch) {
+        const digit = numMatch[1];
+        query.unitConfigurations = {
+          $elemMatch: { $regex: new RegExp(`(^|\\b|&\\s*)${digit}(\\s*BHK|\\b|$)`, 'i') },
+        };
+      } else {
+        query.unitConfigurations = { $elemMatch: { $regex: new RegExp(uc, 'i') } };
+      }
+    }
   }
 
   // Featured flag
@@ -83,24 +151,31 @@ export const getProjects = asyncHandler(async (req, res) => {
 
   // Budget range parsing
   if (budget && budget !== 'All') {
-    switch (budget) {
+    const normalizedBudget = budget.replace(/[\u2013\u2014]/g, '-').trim();
+    switch (normalizedBudget) {
       case 'Under 1 Cr':
         query.priceNumeric = { $gt: 0, $lt: 10000000 };
         break;
-      case '1 – 2 Cr':
+      case '1 - 2 Cr':
       case '1 - 2 Cr':
         query.priceNumeric = { $gte: 10000000, $lte: 20000000 };
         break;
-      case '2 – 3 Cr':
       case '2 - 3 Cr':
         query.priceNumeric = { $gte: 20000000, $lte: 30000000 };
         break;
-      case '3 – 5 Cr':
       case '3 - 5 Cr':
         query.priceNumeric = { $gte: 30000000, $lte: 50000000 };
         break;
       case '5 Cr +':
+      case '5 Cr+':
+      case 'Above 5 Cr':
         query.priceNumeric = { $gte: 50000000 };
+        break;
+      case 'Under 1.5 Cr':
+        query.priceNumeric = { $gt: 0, $lt: 15000000 };
+        break;
+      case '1.5 - 3 Cr':
+        query.priceNumeric = { $gte: 15000000, $lte: 30000000 };
         break;
       default:
         break;
